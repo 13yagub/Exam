@@ -1,0 +1,9 @@
+group=com.example.exam
+version=0.0.1-SNAPSHOT
+description=Exam
+
+javaVersion=21
+lombokVersion=1.18.30
+postgresqlVersion=42.6.0
+springdocVersion=2.2.0
+junitPlatformLauncher=1.10.0

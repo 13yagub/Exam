@@ -1,5 +1,10 @@
 package com.example.exam.service;
 
+import com.example.exam.dto.CustomerRequest;
+import com.example.exam.dto.CustomerResponse;
+import com.example.exam.dto.ChangePinRequest;
+import com.example.exam.exception.InvalidRequestException;
+import com.example.exam.exception.NotFoundException;
 import com.example.exam.model.Customer;
 import com.example.exam.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,47 +20,49 @@ public class CustomerService {
     private final CustomerRepository customerRepository;
     private final Random random = new Random();
 
-    public Customer createCustomerWithCard(String firstName, String lastName, String fin, String pin) {
-        if (fin == null || fin.isEmpty() || pin == null || pin.isEmpty()) {
-            throw new RuntimeException("FIN and PIN cannot be empty");
+    public CustomerResponse createCustomerWithCard(CustomerRequest request) {
+        if (request.getFin() == null || request.getFin().isEmpty()) {
+            throw new InvalidRequestException("FIN cannot be empty");
         }
 
-        Customer customer = customerRepository.findByFinAndDeletedFalse(fin)
-                .orElseGet(() -> {
-                    Customer newCustomer = new Customer();
-                    newCustomer.setFirstName(firstName);
-                    newCustomer.setLastName(lastName);
-                    newCustomer.setFin(fin);
-                    return newCustomer;
-                });
+        Customer customer = customerRepository.findByFinAndDeletedFalse(request.getFin())
+                .orElseGet(() -> Customer.builder()
+                        .firstName(request.getFirstName())
+                        .lastName(request.getLastName())
+                        .fin(request.getFin())
+                        .build()
+                );
 
         if (customer.getCardNumber() != null) {
-            throw new RuntimeException("Customer already has a card");
+            throw new InvalidRequestException("Customer already has a card");
         }
 
         customer.setCardNumber(generateCardNumber());
         customer.setCvv(generateCvv());
         customer.setExpireDate(LocalDate.now().plusYears(5));
-        customer.setPin(pin);
 
-        return customerRepository.save(customer);
+        Customer savedCustomer = customerRepository.save(customer);
+
+        return mapToResponse(savedCustomer);
     }
 
-    public Customer changePin(String cardNumber, String newPin) {
-        if (newPin == null || newPin.isEmpty()) {
-            throw new RuntimeException("PIN cannot be empty");
+    public CustomerResponse changePin(ChangePinRequest request) {
+        if (request.getNewPin() == null || request.getNewPin().isEmpty()) {
+            throw new InvalidRequestException("PIN cannot be empty");
         }
 
-        Customer customer = customerRepository.findByCardNumberAndDeletedFalse(cardNumber)
-                .orElseThrow(() -> new RuntimeException("Card not found"));
+        Customer customer = customerRepository.findByCardNumberAndDeletedFalse(request.getCardNumber())
+                .orElseThrow(() -> new NotFoundException("Card not found"));
 
-        customer.setPin(newPin);
-        return customerRepository.save(customer);
+        customer.setPin(request.getNewPin());
+        Customer savedCustomer = customerRepository.save(customer);
+
+        return mapToResponse(savedCustomer);
     }
 
     public void deleteCustomer(String fin) {
         Customer customer = customerRepository.findByFinAndDeletedFalse(fin)
-                .orElseThrow(() -> new RuntimeException("Customer not found"));
+                .orElseThrow(() -> new NotFoundException("Customer not found"));
 
         customer.setDeleted(true);
         customerRepository.save(customer);
@@ -70,5 +77,16 @@ public class CustomerService {
     private String generateCvv() {
         int cvv = random.nextInt(900) + 100;
         return String.valueOf(cvv);
+    }
+
+    private CustomerResponse mapToResponse(Customer customer) {
+        return CustomerResponse.builder()
+                .firstName(customer.getFirstName())
+                .lastName(customer.getLastName())
+                .fin(customer.getFin())
+                .cardNumber(customer.getCardNumber())
+                .cvv(customer.getCvv())
+                .expireDate(customer.getExpireDate())
+                .build();
     }
 }
